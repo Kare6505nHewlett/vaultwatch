@@ -1,0 +1,37 @@
+# vaultwatch example configuration
+# Copy this file to config.yaml and adjust values for your environment.
+
+vault:
+  # Address of the Vault server. Defaults to http://127.0.0.1:8200
+  address: "https://vault.example.com"
+
+  # Vault token used to authenticate. Can also be set via VAULT_TOKEN env var.
+  token: "s.XXXXXXXXXXXXXXXX"
+
+  # Optional: Vault namespace (Enterprise only)
+  # namespace: "my-org/team-a"
+
+monitor:
+  # How often vaultwatch polls Vault for lease/token status.
+  interval: 5m
+
+  # List of secret paths to monitor for expiry.
+  paths:
+    - secret/data/myapp/db-password
+    - secret/data/myapp/api-key
+    - auth/token/lookup-self
+
+alerts:
+  # Send a warning alert this long before a secret expires.
+  warn_before_expiry: 24h
+
+  # Send a critical alert this long before a secret expires.
+  critical_before_expiry: 1h
+
+  # Optional: Slack incoming webhook URL for notifications.
+  # slack_webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+  # Optional: Email recipients for alert notifications.
+  # email_recipients:
+  #   - ops@example.com
+  #   - security@example.com
