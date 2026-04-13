@@ -32,6 +32,7 @@ func NewMultiNotifier(logger *zap.Logger, notifiers ...Notifier) *MultiNotifier 
 
 // Send dispatches the alert to every registered notifier.
 // Errors are logged but do not stop delivery to remaining notifiers.
+// Returns the first error encountered, if any.
 func (m *MultiNotifier) Send(ctx context.Context, result monitor.CheckResult) error {
 	var firstErr error
 	for _, n := range m.notifiers {
@@ -46,4 +47,9 @@ func (m *MultiNotifier) Send(ctx context.Context, result monitor.CheckResult) er
 		}
 	}
 	return firstErr
+}
+
+// Len returns the number of registered notifiers.
+func (m *MultiNotifier) Len() int {
+	return len(m.notifiers)
 }
