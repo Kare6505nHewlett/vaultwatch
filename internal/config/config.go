@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -8,72 +9,96 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all configuration for vaultwatch.
+// Config holds all vaultwatch configuration.
 type Config struct {
-	Vault   VaultConfig   `yaml:"vault"`
-	Alerts  AlertsConfig  `yaml:"alerts"`
-	Monitor MonitorConfig `yaml:"monitor"`
+	Vault    VaultConfig    `yaml:"vault"`
+	Monitor  MonitorConfig  `yaml:"monitor"`
+	Alert    AlertConfig    `yaml:"alert"`
 }
 
-// VaultConfig contains Vault connection settings.
+// VaultConfig holds Vault connection settings.
 type VaultConfig struct {
-	Address   string `yaml:"address"`
-	Token     string `yaml:"token"`
-	Namespace string `yaml:"namespace"`
+	Address string `yaml:"address"`
+	Token   string `yaml:"token"`
+	Secrets []string `yaml:"secrets"`
 }
 
-// AlertsConfig defines alerting thresholds and channels.
-type AlertsConfig struct {
-	WarnBeforeExpiry  time.Duration `yaml:"warn_before_expiry"`
-	CriticalBeforeExpiry time.Duration `yaml:"critical_before_expiry"`
-	SlackWebhookURL   string        `yaml:"slack_webhook_url"`
-	EmailRecipients   []string      `yaml:"email_recipients"`
-}
-
-// MonitorConfig controls polling behaviour.
+// MonitorConfig holds monitoring schedule settings.
 type MonitorConfig struct {
-	Interval time.Duration `yaml:"interval"`
-	Paths    []string      `yaml:"paths"`
+	Interval    time.Duration `yaml:"interval"`
+	WarnBefore  time.Duration `yaml:"warn_before"`
 }
 
-// Load reads and parses a YAML config file from the given path.
+// AlertConfig holds alert delivery configuration.
+type AlertConfig struct {
+	Log   LogAlertConfig   `yaml:"log"`
+	Slack SlackAlertConfig `yaml:"slack"`
+	Email EmailAlertConfig `yaml:"email"`
+}
+
+// LogAlertConfig configures log-based alerts.
+type LogAlertConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// SlackAlertConfig configures Slack webhook alerts.
+type SlackAlertConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	WebhookURL string `yaml:"webhook_url"`
+}
+
+// EmailAlertConfig configures SMTP email alerts.
+type EmailAlertConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	Host     string   `yaml:"host"`
+	Port     int      `yaml:"port"`
+	From     string   `yaml:"from"`
+	To       []string `yaml:"to"`
+	Password string   `yaml:"password"`
+}
+
+// Load reads and parses the config file at the given path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file %q: %w", path, err)
+		return nil, fmt.Errorf("reading config file: %w", err)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config file %q: %w", path, err)
+		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
-	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+	if err := applyDefaults(&cfg); err != nil {
+		return nil, err
+	}
+
+	if err := validate(&cfg); err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil
 }
 
-// validate checks required fields and applies defaults.
-func (c *Config) validate() error {
-	if c.Vault.Address == "" {
-		c.Vault.Address = "http://127.0.0.1:8200"
+func applyDefaults(cfg *Config) error {
+	if cfg.Vault.Address == "" {
+		cfg.Vault.Address = "http://127.0.0.1:8200"
 	}
-	if c.Vault.Token == "" {
-		c.Vault.Token = os.Getenv("VAULT_TOKEN")
+	if cfg.Monitor.Interval == 0 {
+		cfg.Monitor.Interval = 5 * time.Minute
 	}
-	if c.Vault.Token == "" {
-		return fmt.Errorf("vault token must be set via config or VAULT_TOKEN env var")
+	if cfg.Monitor.WarnBefore == 0 {
+		cfg.Monitor.WarnBefore = 72 * time.Hour
 	}
-	if c.Monitor.Interval == 0 {
-		c.Monitor.Interval = 5 * time.Minute
+	if cfg.Alert.Email.Port == 0 {
+		cfg.Alert.Email.Port = 587
 	}
-	if c.Alerts.WarnBeforeExpiry == 0 {
-		c.Alerts.WarnBeforeExpiry = 24 * time.Hour
-	}
-	if c.Alerts.CriticalBeforeExpiry == 0 {
-		c.Alerts.CriticalBeforeExpiry = 1 * time.Hour
+	return nil
+}
+
+func validate(cfg *Config) error {
+	if cfg.Vault.Token == "" {
+		return errors.New("vault.token is required")
 	}
 	return nil
 }
