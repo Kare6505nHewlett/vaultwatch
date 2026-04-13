@@ -48,6 +48,29 @@ func TestRun_CancelStopsScheduler(t *testing.T) {
 	}
 }
 
+func TestRun_AlreadyCancelledContext(t *testing.T) {
+	var buf bytes.Buffer
+	logger := newTestLogger(&buf)
+
+	s := scheduler.New(nil, nil, []scheduler.Job{}, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run is called
+
+	done := make(chan struct{})
+	go func() {
+		s.Run(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// success — scheduler should exit immediately
+	case <-time.After(2 * time.Second):
+		t.Fatal("scheduler did not stop with pre-cancelled context")
+	}
+}
+
 func TestJob_Fields(t *testing.T) {
 	job := scheduler.Job{
 		SecretPath: "secret/myapp/db",
