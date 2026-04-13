@@ -11,6 +11,12 @@ vault:
   # Optional: Vault namespace (Enterprise only)
   # namespace: "my-org/team-a"
 
+  # Optional: Skip TLS verification. NOT recommended for production.
+  # tls_skip_verify: false
+
+  # Optional: Path to a custom CA certificate for TLS verification.
+  # ca_cert: "/etc/ssl/certs/my-ca.pem"
+
 monitor:
   # How often vaultwatch polls Vault for lease/token status.
   interval: 5m
