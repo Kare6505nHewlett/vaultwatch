@@ -1,77 +1,77 @@
 package monitor
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/yourusername/vaultwatch/internal/vault"
 )
 
-// ExpiryStatus represents the expiry state of a secret lease.
-type ExpiryStatus struct {
-	Path        string
-	LeaseDuration int
-	Renewable   bool
-	ExpiresAt   time.Time
-	Warning     bool
-	Expired     bool
-	Message     string
+// CheckResult holds the result of evaluating a single secret's lease.
+type CheckResult struct {
+	Path     string
+	LeaseTTL time.Duration
+	Warning  bool
+	Expired  bool
+	Err      error
 }
 
-// Checker holds configuration for expiry checking.
-type Checker struct {
-	client        *vault.Client
-	warnThreshold time.Duration
+// SecretChecker checks Vault secrets against configured thresholds.
+type SecretChecker struct {
+	client          *vault.Client
+	warningThreshold time.Duration
+	logger          *slog.Logger
 }
 
-// NewChecker creates a new Checker with the given Vault client and warning threshold.
-func NewChecker(client *vault.Client, warnThreshold time.Duration) *Checker {
-	return &Checker{
-		client:        client,
-		warnThreshold: warnThreshold,
+// NewChecker creates a SecretChecker with the provided client and thresholds.
+func NewChecker(client *vault.Client, warningThreshold time.Duration, logger *slog.Logger) *SecretChecker {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &SecretChecker{
+		client:          client,
+		warningThreshold: warningThreshold,
+		logger:          logger,
 	}
 }
 
-// CheckSecret retrieves the lease info for a secret path and evaluates its expiry status.
-func (c *Checker) CheckSecret(path string) (*ExpiryStatus, error) {
-	lease, err := c.client.GetSecretLease(path)
+// CheckSecret fetches the lease for path and evaluates its expiry state.
+func (c *SecretChecker) CheckSecret(ctx context.Context, path string) CheckResult {
+	lease, err := c.client.GetSecretLease(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get lease for %q: %w", path, err)
+		return CheckResult{
+			Path: path,
+			Err:  fmt.Errorf("fetching lease for %s: %w", path, err),
+		}
 	}
 
-	now := time.Now()
-	expiresAt := now.Add(time.Duration(lease.LeaseDuration) * time.Second)
-
-	status := &ExpiryStatus{
-		Path:          path,
-		LeaseDuration: lease.LeaseDuration,
-		Renewable:     lease.Renewable,
-		ExpiresAt:     expiresAt,
+	ttl := time.Duration(lease.LeaseDuration) * time.Second
+	result := CheckResult{
+		Path:     path,
+		LeaseTTL: ttl,
 	}
 
 	switch {
-	case lease.LeaseDuration <= 0:
-		status.Expired = true
-		status.Message = fmt.Sprintf("secret %q has expired or has no lease", path)
-	case expiresAt.Before(now.Add(c.warnThreshold)):
-		status.Warning = true
-		status.Message = fmt.Sprintf("secret %q expires in %s", path, time.Until(expiresAt).Round(time.Second))
+	case ttl <= 0:
+		result.Expired = true
+		c.logger.Warn("secret expired", "path", path)
+	case ttl <= c.warningThreshold:
+		result.Warning = true
+		c.logger.Warn("secret expiring soon", "path", path, "ttl", ttl)
 	default:
-		status.Message = fmt.Sprintf("secret %q is valid, expires at %s", path, expiresAt.Format(time.RFC3339))
+		c.logger.Info("secret healthy", "path", path, "ttl", ttl)
 	}
 
-	return status, nil
+	return result
 }
 
-// CheckSecrets checks multiple secret paths and returns all statuses.
-func (c *Checker) CheckSecrets(paths []string) ([]*ExpiryStatus, error) {
-	var statuses []*ExpiryStatus
-	for _, path := range paths {
-		status, err := c.CheckSecret(path)
-		if err != nil {
-			return nil, err
-		}
-		statuses = append(statuses, status)
+// CheckAll checks every path and returns a slice of results.
+func (c *SecretChecker) CheckAll(ctx context.Context, paths []string) []CheckResult {
+	results := make([]CheckResult, 0, len(paths))
+	for _, p := range paths {
+		results = append(results, c.CheckSecret(ctx, p))
 	}
-	return statuses, nil
+	return results
 }
