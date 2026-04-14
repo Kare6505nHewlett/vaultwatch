@@ -33,6 +33,9 @@ func NewKVChecker(client *vault.Client, warning time.Duration, logger *zap.Logge
 }
 
 // CheckKVSecret looks up KV v2 metadata and returns a CheckResult.
+// It reports StatusExpired if the secret version is destroyed or already deleted,
+// StatusWarning if deletion is scheduled within the warning threshold, and
+// StatusOK otherwise.
 func (k *KVChecker) CheckKVSecret(ctx context.Context, mount, path string) CheckResult {
 	fullPath := fmt.Sprintf("%s/%s", mount, path)
 
@@ -58,10 +61,10 @@ func (k *KVChecker) CheckKVSecret(ctx context.Context, mount, path string) Check
 		until := time.Until(*meta.DeletedTime)
 		if until <= 0 {
 			return CheckResult{
-				Path:      fullPath,
-				Status:    StatusExpired,
-				TTL:       0,
-				Message:   fmt.Sprintf("version %d has been deleted", meta.Version),
+				Path:    fullPath,
+				Status:  StatusExpired,
+				TTL:     0,
+				Message: fmt.Sprintf("version %d has been deleted", meta.Version),
 			}
 		}
 		status := StatusOK
@@ -82,4 +85,14 @@ func (k *KVChecker) CheckKVSecret(ctx context.Context, mount, path string) Check
 		Status:  StatusOK,
 		Message: fmt.Sprintf("version %d is current", meta.Version),
 	}
+}
+
+// CheckKVSecrets checks multiple KV secrets and returns all results.
+// Checks continue even if individual secrets fail.
+func (k *KVChecker) CheckKVSecrets(ctx context.Context, mount string, paths []string) []CheckResult {
+	results := make([]CheckResult, 0, len(paths))
+	for _, path := range paths {
+		results = append(results, k.CheckKVSecret(ctx, mount, path))
+	}
+	return results
 }
