@@ -75,3 +75,21 @@ func (c *SecretChecker) CheckAll(ctx context.Context, paths []string) []CheckRes
 	}
 	return results
 }
+
+// Summary returns counts of healthy, warning, expired, and errored results
+// from the provided slice, useful for logging or metrics reporting.
+func Summary(results []CheckResult) (healthy, warning, expired, errored int) {
+	for _, r := range results {
+		switch {
+		case r.Err != nil:
+			errored++
+		case r.Expired:
+			expired++
+		case r.Warning:
+			warning++
+		default:
+			healthy++
+		}
+	}
+	return
+}
