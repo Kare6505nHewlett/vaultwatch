@@ -15,6 +15,16 @@ type TokenInfo struct {
 	Policies   []string
 }
 
+// IsExpired reports whether the token has expired.
+func (t *TokenInfo) IsExpired() bool {
+	return time.Now().After(t.ExpireTime)
+}
+
+// ExpiresWithin reports whether the token will expire within the given duration.
+func (t *TokenInfo) ExpiresWithin(d time.Duration) bool {
+	return time.Now().Add(d).After(t.ExpireTime)
+}
+
 // tokenLookupResponse mirrors the Vault API response for token self-lookup.
 type tokenLookupResponse struct {
 	Data struct {
