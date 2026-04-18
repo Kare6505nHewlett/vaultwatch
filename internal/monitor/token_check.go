@@ -41,10 +41,11 @@ func (tc *TokenChecker) CheckToken(ctx context.Context) (CheckResult, error) {
 		return CheckResult{}, fmt.Errorf("failed to get token info: %w", err)
 	}
 
+	now := time.Now()
 	result := CheckResult{
 		Path:      "auth/token/lookup-self",
 		LeaseTTL:  info.TTL,
-		ExpiresAt: time.Now().Add(info.TTL),
+		ExpiresAt: now.Add(info.TTL),
 	}
 
 	switch {
@@ -60,4 +61,13 @@ func (tc *TokenChecker) CheckToken(ctx context.Context) (CheckResult, error) {
 	}
 
 	return result, nil
+}
+
+// IsExpired returns true if the token is expired or will expire within the given duration.
+func (tc *TokenChecker) IsExpired(ctx context.Context, within time.Duration) (bool, error) {
+	result, err := tc.CheckToken(ctx)
+	if err != nil {
+		return false, err
+	}
+	return result.Status == StatusExpired || result.LeaseTTL <= within, nil
 }
