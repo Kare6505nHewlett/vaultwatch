@@ -36,9 +36,7 @@ func (h *HealthJob) run(ctx context.Context) error {
 	result := h.monitor.Run(ctx)
 	if result.Err != nil {
 		h.logger.Error("health job encountered error", zap.Error(result.Err))
-		if h.onSealed != nil {
-			h.onSealed(result)
-		}
+		h.notify(result)
 		return result.Err
 	}
 	if !result.IsHealthy() {
@@ -46,9 +44,14 @@ func (h *HealthJob) run(ctx context.Context) error {
 			zap.Bool("sealed", result.Sealed),
 			zap.Bool("initialized", result.Initialized),
 		)
-		if h.onSealed != nil {
-			h.onSealed(result)
-		}
+		h.notify(result)
 	}
 	return nil
+}
+
+// notify calls onSealed if it is set.
+func (h *HealthJob) notify(result monitor.HealthResult) {
+	if h.onSealed != nil {
+		h.onSealed(result)
+	}
 }
