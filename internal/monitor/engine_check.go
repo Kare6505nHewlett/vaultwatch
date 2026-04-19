@@ -63,3 +63,14 @@ func (m *EngineMonitor) Check(ctx context.Context) ([]EngineResult, error) {
 	}
 	return results, nil
 }
+
+// Unhealthy returns a filtered slice of results where Healthy is false.
+func Unhealthy(results []EngineResult) []EngineResult {
+	var out []EngineResult
+	for _, r := range results {
+		if !r.Healthy {
+			out = append(out, r)
+		}
+	}
+	return out
+}
