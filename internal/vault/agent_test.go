@@ -85,3 +85,14 @@ func TestGetAgentInfo_ServerError(t *testing.T) {
 		t.Fatal("expected error on server error response")
 	}
 }
+
+func TestGetAgentInfo_NotFound(t *testing.T) {
+	srv := newMockAgentServer(t, http.StatusNotFound, nil)
+	defer srv.Close()
+
+	checker := newAgentChecker(t, srv.URL)
+	_, err := checker.GetAgentInfo()
+	if err == nil {
+		t.Fatal("expected error on 404 response")
+	}
+}
