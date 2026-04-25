@@ -51,5 +51,11 @@ func (m *ReplicationMonitor) Check() (*ReplicationResult, error) {
 		m.logger.Warn("DR replication unhealthy", zap.String("state", status.Data.DR.State))
 	}
 
+	if status.Data.Performance.Mode == "primary" && status.Data.Performance.State != "running" {
+		result.Healthy = false
+		result.Message = fmt.Sprintf("performance replication unhealthy: state=%s", status.Data.Performance.State)
+		m.logger.Warn("performance replication unhealthy", zap.String("state", status.Data.Performance.State))
+	}
+
 	return result, nil
 }
